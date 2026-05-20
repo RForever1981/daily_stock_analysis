@@ -25,12 +25,22 @@ const ALERT_TYPE_FILTER_OPTIONS = [
   { value: 'price_cross', label: '价格突破' },
   { value: 'price_change_percent', label: '涨跌幅' },
   { value: 'volume_spike', label: '成交量放大' },
+  { value: 'ma_price_cross', label: '价格均线穿越' },
+  { value: 'rsi_threshold', label: 'RSI 阈值' },
+  { value: 'macd_cross', label: 'MACD 金叉/死叉' },
+  { value: 'kdj_cross', label: 'KDJ 金叉/死叉' },
+  { value: 'cci_threshold', label: 'CCI 阈值' },
 ];
 
 const typeLabel: Record<AlertType, string> = {
   price_cross: '价格突破',
   price_change_percent: '涨跌幅',
   volume_spike: '成交量放大',
+  ma_price_cross: '价格均线穿越',
+  rsi_threshold: 'RSI 阈值',
+  macd_cross: 'MACD 金叉/死叉',
+  kdj_cross: 'KDJ 金叉/死叉',
+  cci_threshold: 'CCI 阈值',
 };
 
 const severityLabel: Record<string, string> = {
@@ -46,7 +56,27 @@ function formatParameters(rule: AlertRuleItem): string {
   if (rule.alertType === 'price_change_percent') {
     return `${rule.parameters.direction === 'down' ? '下跌' : '上涨'} ${rule.parameters.changePct ?? '--'}%`;
   }
-  return `${rule.parameters.multiplier ?? '--'}x`;
+  if (rule.alertType === 'volume_spike') {
+    return `${rule.parameters.multiplier ?? '--'}x`;
+  }
+  if (rule.alertType === 'ma_price_cross') {
+    return `${rule.parameters.direction === 'below' ? '下穿' : '上穿'} MA${rule.parameters.window ?? '--'}`;
+  }
+  if (rule.alertType === 'rsi_threshold') {
+    return `RSI${rule.parameters.period ?? '--'} ${rule.parameters.direction === 'below' ? '下穿' : '上穿'} ${rule.parameters.threshold ?? '--'}`;
+  }
+  if (rule.alertType === 'macd_cross' || rule.alertType === 'kdj_cross') {
+    const direction = rule.parameters.direction === 'bearish_cross' ? '死叉' : '金叉';
+    if (rule.alertType === 'macd_cross') {
+      return `MACD(${rule.parameters.fastPeriod ?? '--'},${rule.parameters.slowPeriod ?? '--'},${rule.parameters.signalPeriod ?? '--'}) ${direction}`;
+    }
+    return `KDJ(${rule.parameters.period ?? '--'},${rule.parameters.kPeriod ?? '--'},${rule.parameters.dPeriod ?? '--'}) ${direction}`;
+  }
+  return `CCI${rule.parameters.period ?? '--'} ${rule.parameters.direction === 'below' ? '下穿' : '上穿'} ${rule.parameters.threshold ?? '--'}`;
+}
+
+function isCoolingDown(rule: AlertRuleItem): boolean {
+  return rule.cooldownActive === true;
 }
 
 interface AlertRuleListProps {
@@ -122,7 +152,7 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b border-border/60 text-xs uppercase text-muted-text">
               <tr>
                 <th className="px-3 py-2 font-medium">规则</th>
@@ -130,6 +160,7 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
                 <th className="px-3 py-2 font-medium">类型</th>
                 <th className="px-3 py-2 font-medium">参数</th>
                 <th className="px-3 py-2 font-medium">状态</th>
+                <th className="px-3 py-2 font-medium">冷却</th>
                 <th className="px-3 py-2 font-medium">更新时间</th>
                 <th className="px-3 py-2 text-right font-medium">操作</th>
               </tr>
@@ -155,6 +186,10 @@ export const AlertRuleList: React.FC<AlertRuleListProps> = ({
                     <Badge variant={rule.enabled ? 'success' : 'default'}>
                       {rule.enabled ? '已启用' : '已停用'}
                     </Badge>
+                  </td>
+                  <td className="px-3 py-3 text-xs text-secondary-text">
+                    <div>{isCoolingDown(rule) ? '冷却中' : '未冷却'}</div>
+                    <div className="mt-1">{formatDateTime(rule.cooldownUntil)}</div>
                   </td>
                   <td className="px-3 py-3 text-xs text-secondary-text">{formatDateTime(rule.updatedAt ?? rule.createdAt)}</td>
                   <td className="px-3 py-3">
